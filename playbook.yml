@@ -1,0 +1,37 @@
+---
+- hosts: target
+  tasks:
+    - name: Stoping the ControlM application
+      shell: /opt/aptm/ctm_stop.sh > /tmp/output ; cat /tmp/output | grep -iw 'failed' > /dev/null ; if [ $? == 0 ]; then echo 'ApplicationStopFail' ; else echo 'ApplicationStopped';fi
+      register: appr_check
+    - debug: msg=" ControlM application stopped successfully"
+      when: appr_check.stdout == "ApplicationStopped"
+    - debug: msg="ControlM application stopped failed"
+      when: apr_check.stdout == "ApplicationStopFail"
+
+    - name: log messages for ControlM application
+      command: cat /tmp/output
+      register: logmsg
+    - debug: msg="{{ logmsg.stdout_lines }}"
+
+    - name: Wait for 10 second
+      wait_for: timeout=10
+
+    - name: stoping APTM DB
+      shell: /opt/aptm/aptm_dev_db_stop.sh > /tmp/output2 ; cat /tmp/output2 | grep -iw 'failed' > /dev/null ; if [ $? == 0 ] ; then echo 'DBStoppedFailed' ; else echo 'DBStoppedSuccessfully' ; fi
+      when: appr_check.stdout == "ApplicationStopped"
+
+      register: db_status_check
+    - debug: msg="DB stopped failed"
+      when: db_status_check.stdout == "DBStoppedFailed"
+
+    - name: Log message for aptm DB stopped
+      command: cat /tmo/output2
+      register: logmsg1
+    - debug: msg="{{ logmsg1.stdout_lines }}"
+
+    - debug: msg="Log message for APTM DB stopped successfully"
+      when: db_status_check.stdout == "DBStoppedSuccessfully"
+
+    - name: wait for 10 second
+      wait_for: timeout=10
