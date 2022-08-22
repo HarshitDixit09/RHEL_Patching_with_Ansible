@@ -1,37 +1,43 @@
 ---
 - hosts: target
   tasks:
-    - name: Stoping the ControlM application
-      shell: /opt/aptm/ctm_stop.sh > /tmp/output ; cat /tmp/output | grep -iw 'failed' > /dev/null ; if [ $? == 0 ]; then echo 'ApplicationStopFail' ; else echo 'ApplicationStopped';fi
-      register: appr_check
-    - debug: msg=" ControlM application stopped successfully"
-      when: appr_check.stdout == "ApplicationStopped"
-    - debug: msg="ControlM application stopped failed"
-      when: apr_check.stdout == "ApplicationStopFail"
+      - name: Verify if DB/APP servises are running or not
+        shell: if ps -ef | grep -i apache2 | grep -v grep > /dev/null ; then echo 'Process_running' ; else echo 'process_not_running' ; fi
+        ignore_errors: true
+        register: proc_status_check
+      - debug: msg="{{ proc_status_check.stdout }}"
+      - name:  Decision point check 
+        fail: 
+            msg="{{ inventory_hostname }} is haveing running application , please stop first to proceed for patching"
+        when: proc_status_check.stdout == "Process_running"
 
-    - name: log messages for ControlM application
-      command: cat /tmp/output
-      register: logmsg
-    - debug: msg="{{ logmsg.stdout_lines }}"
+      - name: Current kernel version
+        shell: uname -r
+        register: cur_ker
 
-    - name: Wait for 10 second
-      wait_for: timeout=10
+      - name: initilize patch
+        yum:
+            name=kernel
+            state=latest
+        register: yum_update
+      - debug: msg=" kernel has been updated "
+        when: yum_update.rc == 0
+      - name: check if reboot is required or not 
+        shell: kernel_new=$(rpm -qa --last kernel | head -1 | awk '{print $1}' | sed 's/kernel-//g'); kernel_now=$(uname -r); if [[ $kernel_new != $kernel_now ]] ; then echo "Reboot is required"; else echo "reboot is not required"; fi
+        ignore_errors: true
+        register: reboot_check
+      - debug: msg="{{ reboot_check.stdout }}"
 
-    - name: stoping APTM DB
-      shell: /opt/aptm/aptm_dev_db_stop.sh > /tmp/output2 ; cat /tmp/output2 | grep -iw 'failed' > /dev/null ; if [ $? == 0 ] ; then echo 'DBStoppedFailed' ; else echo 'DBStoppedSuccessfully' ; fi
-      when: appr_check.stdout == "ApplicationStopped"
+      - name: reboot after patching
+        shell: shutdown -r now 
+        async: 1
+        poll: 0
 
-      register: db_status_check
-    - debug: msg="DB stopped failed"
-      when: db_status_check.stdout == "DBStoppedFailed"
+      - name: wait for system to come up 
+        pause:
+              minutes: 2
 
-    - name: Log message for aptm DB stopped
-      command: cat /tmo/output2
-      register: logmsg1
-    - debug: msg="{{ logmsg1.stdout_lines }}"
-
-    - debug: msg="Log message for APTM DB stopped successfully"
-      when: db_status_check.stdout == "DBStoppedSuccessfully"
-
-    - name: wait for 10 second
-      wait_for: timeout=10
+      - name: new kernel version
+        shell: uname -r
+        register: new_kernel
+      - debug: msg="New Kernel version is {{ new_kernel.stdout }} and old kernel version was {{ cur_ker.stdout }}"
