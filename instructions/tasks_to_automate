@@ -1,0 +1,13 @@
+1 - Verifi the Application/DB is running or not 
+
+2 - Decision point to start the patching 
+
+3 - upgrade the kernel or Package
+
+4 - Check if reboot is required after kernel update 
+
+5 - Reboot the system 
+
+6 - Wait for few minutes so that server should comeup after reboot
+
+7 - debug a message with new and old kernel version 
